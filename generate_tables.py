@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from trdg.generators import (
     GeneratorFromStrings,
 )
@@ -6,16 +8,27 @@ import os
 import numpy as np
 import random
 import pandas as pd
+from faker import Faker
+
 
 
 NUM_IMAGES_TO_SAVE = 10
 NUM_PRICES_TO_GENERATE = 10000
 
-df = pd.read_csv("openfoodfacts_export_csv.csv", on_bad_lines='skip', sep='\t', low_memory=True)
-df[["product_name_nb", "generic_name_nb", "brands"]]
+data = []
 
-all_words = df[["product_name_nb", "generic_name_nb", "brands"]].to_numpy().flatten()
-print(all_words)
+for i in range(1000):
+    fake_person = Faker()
+    fake_start = fake_person.date_time_this_month()
+    duration = timedelta(hours=random.randint(3, 10))
+    fake_end = fake_start + duration
+    fake_location = fake_person.city()
+
+    data.append([fake_person.name(), str(fake_start), str(fake_end), fake_location])
+
+    df = pd.DataFrame(data, columns=["name", "start_time", "end_time", "location"])
+
+    all_words = df[["name", "start_time", "end_time", "location"]].to_numpy().flatten()
 
 # ignore np nan
 num_before = len(all_words)
