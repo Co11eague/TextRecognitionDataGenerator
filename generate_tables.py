@@ -39,37 +39,17 @@ all_words = list(set(all_words))
 print("Removed", len(all_words), "duplicates")
 print("Current number of words: ", len(all_words))
 
-#randomly generate 2 digits between 0-99
-number_strings = []
-print(len(all_words)*9//10)
-for i in range(len(all_words)*9//10): #90 percent of all words
- digits = np.random.randint(1, 100, 4)
- before_comma = f"{str(digits[0])}" #before comma is just given as 1 digit if 0-9
- after_comma = f"{str(digits[1])}" if len(str(digits[1])) == 2 else f"0{str(digits[1])}"
- number_string = f"{before_comma},{after_comma}"
- number_strings.append(number_string)
-
-#then create 10 percent of the words with price between 100-999
-for i in range(len(all_words)*1//10): #10 percent of all words
- print(i)
- before_comma = np.random.randint(100, 999, 1)
- after_comma = np.random.randint(1, 99, 1)
- after_comma = f"{str(after_comma[0])}" if len(str(after_comma[0])) == 2 else f"0{str(after_comma[0])}"
- number_string = f"{str(before_comma[0])},{str(after_comma)}"
- number_strings.append(number_string)
 
 
- # now given word list and number list, get all combinations
- all_combinations = []
- for word in tqdm(all_words):
-     for number in random.sample(number_strings, 20):  # only need 20 prices per product for example
-         for num_tabs in [1]:
-             combined_string = word + "    " * num_tabs + number
-             all_combinations.append(combined_string)
+
+# now given word list and number list, get all combinations
+all_combinations = []
+for word in tqdm(all_words):
+    all_combinations.append(word)
 
 #generate the images
 generator = GeneratorFromStrings(
-    random.sample(all_combinations, 10000),
+    random.sample(all_combinations, min(len(all_combinations), 10000)),
 
     # uncomment the lines below for some image augmentation options
     # blur=6,
