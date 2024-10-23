@@ -9,6 +9,8 @@ import numpy as np
 import random
 import pandas as pd
 from faker import Faker
+from PIL import Image, ImageDraw, ImageFont
+
 
 
 
@@ -73,13 +75,51 @@ if not os.path.exists('output/labels.txt'):
 current_index = len(os.listdir('output')) - 1 #all images minus the labels file
 f = open("output/labels.txt", "a")
 
+images = []
+
 for counter, (img, lbl) in tqdm(enumerate(generator), total = NUM_IMAGES_TO_SAVE):
     if (counter >= NUM_IMAGES_TO_SAVE):
         break
+    images.append(img)
     # img.show()
     #save pillow image
-    img.save(f'output/image{current_index}.png')
-    f.write(f'image{current_index}.png {lbl}\n')
     current_index += 1
     # Do something with the pillow images here.
+
+
+def create_final_table_image_from_images(images, cell_width, cell_height, cols, rows):
+    # Step 1: Create a blank canvas large enough to hold the final table of images
+    table_width = cell_width * cols
+    table_height = cell_height * rows
+    final_image = Image.new("RGB", (table_width, table_height), color="white")
+
+    # Step 2: Place each word image into the corresponding cell in the grid
+    for row in range(rows):
+        for col in range(cols):
+            img_index = row * cols + col
+            if img_index >= len(images):
+                break  # Stop if we run out of images
+            img = images[img_index]
+
+            # Resize the image to fit the cell, if necessary
+            img_resized = img.resize((cell_width, cell_height))
+
+            # Calculate the position for the image in the table
+            x = col * cell_width
+            y = row * cell_height
+
+            # Paste the image into the final table image
+            final_image.paste(img_resized, (x, y))
+
+    # Step 3: Return the final combined image
+    return final_image
+
+final = create_final_table_image_from_images(images, 300, 150, 3, 3)
+
+final.save(f'output/imagefinal.png')
+#f.write(f'imagefinal.png {lbl}\n')
+
 f.close()
+
+
+
