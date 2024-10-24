@@ -27,6 +27,7 @@ for i in range(1000):
     fake_person = Faker()
     fake_start_str = fake_person.time(pattern="%H:%M")
     fake_start = datetime.strptime(fake_start_str, "%H:%M")
+    fake_date = fake_person.date()
 
     # Add a random duration (between 3 to 10 hours)
     duration = timedelta(hours=random.randint(3, 10))
@@ -40,10 +41,10 @@ for i in range(1000):
     fake_day = fake_person.day_of_week()
 
     # Append the data
-    data.append([fake_person.first_name(), fake_start_str, fake_end_str, fake_location, fake_day])
+    data.append([fake_person.first_name(), fake_start_str, fake_end_str, fake_location, fake_day, fake_date])
 
 # Create DataFrame from the generated data (do this once after loop)
-df = pd.DataFrame(data, columns=["name", "start_time", "end_time", "location", "fake_day"])
+df = pd.DataFrame(data, columns=["name", "start_time", "end_time", "location", "fake_day", "fake_date"])
 
 # Split into 4 separate arrays (done after the loop)
 names = df["name"].to_numpy()
@@ -51,6 +52,7 @@ start_times = df["start_time"].to_numpy()
 end_times = df["end_time"].to_numpy()
 locations = df["location"].to_numpy()
 fake_days = df["fake_day"].to_numpy()
+fake_dates = df["fake_date"].to_numpy()
 
 
 
@@ -76,8 +78,7 @@ start_times = cleanup(start_times)
 end_times = cleanup(end_times)
 locations = cleanup(locations)
 fake_days = cleanup(fake_days)
-
-
+fake_dates = cleanup(fake_dates)
 
 
 # now given word list and number list, get all combinations
@@ -86,6 +87,7 @@ start_time_combinations = combinations(start_times)
 end_time_combinations = combinations(end_times)
 location_combinations = combinations(locations)
 fake_day_combinations = combinations(fake_days)
+fake_dates_combinations = combinations(fake_dates)
 
 
 #generate the images
@@ -117,6 +119,10 @@ daysGenerator = GeneratorFromStrings(
     random.sample(fake_day_combinations, min(len(fake_day_combinations), 10000)),
 )
 
+datesGenerator = GeneratorFromStrings(
+    random.sample(fake_dates_combinations, min(len(fake_dates_combinations), 10000)),
+)
+
 # save images from generator
 # if output folder doesnt exist, create it
 if not os.path.exists('output'):
@@ -133,7 +139,7 @@ f = open("output/labels.txt", "a")
 images = []
 
 
-def create_final_rota_image(name_images, start_time_images, end_time_images, location_images, days_images, cell_width,
+def create_final_rota_image(name_images, start_time_images, end_time_images, location_images, days_images, dates_images, cell_width,
                             cell_height, rows):
     # Set up table size
     num_days = 10  # Number of days to display
@@ -142,13 +148,20 @@ def create_final_rota_image(name_images, start_time_images, end_time_images, loc
     table_height = cell_height * (rows + 1)  # Adjust height for the weekday row
     final_image = Image.new("RGB", (table_width, table_height), color="white")
 
+    for i, date_image in enumerate(dates_images):
+        if i == num_days:
+            break
+        resized_date_image = date_image.resize((cell_width * 2, cell_height))  # Resize to span two columns
+        final_image.paste(resized_date_image, (i * cell_width * 2 + cell_width, 0))  # Position date images
+
+
     # Step 1: Place the weekday images in the first row
     for i, day_image in enumerate(days_images):
         if i == num_days:
             break
         resized_day_image = day_image.resize((cell_width * 2, cell_height))  # Resize to span two columns
-        final_image.paste(resized_day_image,
-                          (i * cell_width * 2 + cell_width, 0))  # Centered above start and end time columns
+        final_image.paste(resized_day_image, (i * cell_width * 2 + cell_width, cell_height))  # Position weekday images below date images
+
 
     # Step 2: Place each word image into its corresponding cell in the grid
     for row in range(rows):
@@ -189,6 +202,7 @@ start_time_images = print_progress(startTimeGenerator, "Start Time")
 end_time_images = print_progress(endTimeGenerator, "End Time")
 location_images = print_progress(locationGenerator, "Location")
 days_images = print_progress(daysGenerator, "Day")
+dates_images = print_progress(datesGenerator, "Date")
 
 final_rota_image = create_final_rota_image(
     name_images,
@@ -196,6 +210,7 @@ final_rota_image = create_final_rota_image(
     end_time_images,
     location_images,
     days_images,
+    dates_images,
     cell_width=300,
     cell_height=150,
     rows=20  # Adjust rows based on the data size
