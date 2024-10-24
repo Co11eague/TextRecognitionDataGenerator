@@ -1,4 +1,5 @@
 from datetime import timedelta
+from tkinter.font import names
 
 from trdg.generators import (
     GeneratorFromStrings,
@@ -10,48 +11,86 @@ import random
 import pandas as pd
 from faker import Faker
 from PIL import Image, ImageDraw, ImageFont
+from datetime import datetime, timedelta
 
 
 
 
-NUM_IMAGES_TO_SAVE = 10
-NUM_PRICES_TO_GENERATE = 10000
+
+NUM_IMAGES_TO_SAVE = 100
+NUM_PRICES_TO_GENERATE = 1000
 
 data = []
 
+
 for i in range(1000):
     fake_person = Faker()
-    fake_start = fake_person.date_time_this_month()
+    fake_start_str = fake_person.time(pattern="%H:%M")
+    fake_start = datetime.strptime(fake_start_str, "%H:%M")
+
+    # Add a random duration (between 3 to 10 hours)
     duration = timedelta(hours=random.randint(3, 10))
+
+    # Calculate the end time by adding the duration
     fake_end = fake_start + duration
+
+    # Convert end time back to a string if needed for display purposes
+    fake_end_str = fake_end.strftime("%H:%M")
     fake_location = fake_person.city()
+    fake_day = fake_person.day_of_week()
 
-    data.append([fake_person.name(), str(fake_start), str(fake_end), fake_location])
+    # Append the data
+    data.append([fake_person.first_name(), fake_start_str, fake_end_str, fake_location, fake_day])
 
-    df = pd.DataFrame(data, columns=["name", "start_time", "end_time", "location"])
+# Create DataFrame from the generated data (do this once after loop)
+df = pd.DataFrame(data, columns=["name", "start_time", "end_time", "location", "fake_day"])
 
-    all_words = df[["name", "start_time", "end_time", "location"]].to_numpy().flatten()
+# Split into 4 separate arrays (done after the loop)
+names = df["name"].to_numpy()
+start_times = df["start_time"].to_numpy()
+end_times = df["end_time"].to_numpy()
+locations = df["location"].to_numpy()
+fake_days = df["fake_day"].to_numpy()
 
-# ignore np nan
-num_before = len(all_words)
-all_words = [x for x in all_words if str(x) != 'nan']
-after_nan_filter = len(all_words)
-print("removed: ", num_before - after_nan_filter, "words because of nan values")
-all_words = list(set(all_words))
-print("Removed", len(all_words), "duplicates")
-print("Current number of words: ", len(all_words))
+
+
+def cleanup(data):
+    num_before = len(data)
+    data = [x for x in data if str(x) != 'nan']
+    after_nan_filter = len(data)
+    print("removed: ", num_before - after_nan_filter, "words because of nan values")
+    data = list(set(data))
+    print("Removed", len(data), "duplicates")
+    print("Current number of words: ", len(data))
+    return data
+
+def combinations(data):
+    combinations = []
+    for word in tqdm(data):
+        combinations.append(word)
+
+    return combinations
+
+names = cleanup(names)
+start_times = cleanup(start_times)
+end_times = cleanup(end_times)
+locations = cleanup(locations)
+fake_days = cleanup(fake_days)
 
 
 
 
 # now given word list and number list, get all combinations
-all_combinations = []
-for word in tqdm(all_words):
-    all_combinations.append(word)
+name_combinations = combinations(names)
+start_time_combinations = combinations(start_times)
+end_time_combinations = combinations(end_times)
+location_combinations = combinations(locations)
+fake_day_combinations = combinations(fake_days)
+
 
 #generate the images
-generator = GeneratorFromStrings(
-    random.sample(all_combinations, min(len(all_combinations), 10000)),
+nameGenerator = GeneratorFromStrings(
+    random.sample(name_combinations, min(len(name_combinations), 10000)),
 
     # uncomment the lines below for some image augmentation options
     # blur=6,
@@ -60,6 +99,22 @@ generator = GeneratorFromStrings(
     # skewing_angle=20,
     # background_type=1,
     # text_color="red",
+)
+
+startTimeGenerator = GeneratorFromStrings(
+    random.sample(start_time_combinations, min(len(start_time_combinations), 10000)),
+)
+
+endTimeGenerator = GeneratorFromStrings(
+    random.sample(end_time_combinations, min(len(end_time_combinations), 10000)),
+)
+
+locationGenerator = GeneratorFromStrings(
+    random.sample(location_combinations, min(len(location_combinations), 10000)),
+)
+
+daysGenerator = GeneratorFromStrings(
+    random.sample(fake_day_combinations, min(len(fake_day_combinations), 10000)),
 )
 
 # save images from generator
@@ -77,46 +132,79 @@ f = open("output/labels.txt", "a")
 
 images = []
 
-for counter, (img, lbl) in tqdm(enumerate(generator), total = NUM_IMAGES_TO_SAVE):
-    if (counter >= NUM_IMAGES_TO_SAVE):
-        break
-    images.append(img)
-    # img.show()
-    #save pillow image
-    current_index += 1
-    # Do something with the pillow images here.
 
-
-def create_final_table_image_from_images(images, cell_width, cell_height, cols, rows):
-    # Step 1: Create a blank canvas large enough to hold the final table of images
+def create_final_rota_image(name_images, start_time_images, end_time_images, location_images, days_images, cell_width,
+                            cell_height, rows):
+    # Set up table size
+    num_days = 10  # Number of days to display
+    cols = 1 + (num_days * 2) + 1  # 1 Name column, 2 columns per day (Start & End), 1 Location column
     table_width = cell_width * cols
-    table_height = cell_height * rows
+    table_height = cell_height * (rows + 1)  # Adjust height for the weekday row
     final_image = Image.new("RGB", (table_width, table_height), color="white")
 
-    # Step 2: Place each word image into the corresponding cell in the grid
+    # Step 1: Place the weekday images in the first row
+    for i, day_image in enumerate(days_images):
+        if i == num_days:
+            break
+        resized_day_image = day_image.resize((cell_width * 2, cell_height))  # Resize to span two columns
+        final_image.paste(resized_day_image,
+                          (i * cell_width * 2 + cell_width, 0))  # Centered above start and end time columns
+
+    # Step 2: Place each word image into its corresponding cell in the grid
     for row in range(rows):
+        # Get images for the current row
+        if row >= len(name_images):
+            break  # Stop if we run out of images
+
+        images_in_row = [name_images[row]]
+
+        # Add start and end times for each day
+        for i in range(num_days):
+            index = random.randint(0, len(start_time_images) - 1)
+            images_in_row.append(start_time_images[index])  # Start time for day i
+            images_in_row.append(end_time_images[index])  # End time for day i
+
+        images_in_row.append(location_images[row])  # Location column
+
         for col in range(cols):
-            img_index = row * cols + col
-            if img_index >= len(images):
-                break  # Stop if we run out of images
-            img = images[img_index]
-
-            # Resize the image to fit the cell, if necessary
+            img = images_in_row[col]
             img_resized = img.resize((cell_width, cell_height))
-
-            # Calculate the position for the image in the table
             x = col * cell_width
-            y = row * cell_height
-
-            # Paste the image into the final table image
+            y = (row + 1) * cell_height  # Offset by one row to accommodate the weekday images
             final_image.paste(img_resized, (x, y))
 
-    # Step 3: Return the final combined image
     return final_image
 
-final = create_final_table_image_from_images(images, 300, 150, 3, 3)
+def print_progress(generator, label):
+    images = []
+    for img, lbl in generator:
+        images.append(img)
+        print(f"{label}: {len(images)} images processed")
+        if len(images) >= NUM_IMAGES_TO_SAVE:
+            break
+    return images
 
-final.save(f'output/imagefinal.png')
+name_images = print_progress(nameGenerator, "Name")
+start_time_images = print_progress(startTimeGenerator, "Start Time")
+end_time_images = print_progress(endTimeGenerator, "End Time")
+location_images = print_progress(locationGenerator, "Location")
+days_images = print_progress(daysGenerator, "Day")
+
+final_rota_image = create_final_rota_image(
+    name_images,
+    start_time_images,
+    end_time_images,
+    location_images,
+    days_images,
+    cell_width=300,
+    cell_height=150,
+    rows=20  # Adjust rows based on the data size
+)
+
+final_rota_image.save('output/rota_image.png')
+
+
+
 #f.write(f'imagefinal.png {lbl}\n')
 
 f.close()
