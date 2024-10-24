@@ -148,11 +148,15 @@ def create_final_rota_image(name_images, start_time_images, end_time_images, loc
     table_height = cell_height * (rows + 1)  # Adjust height for the weekday row
     final_image = Image.new("RGB", (table_width, table_height), color="white")
 
+    random.shuffle(dates_images)
+
     for i, date_image in enumerate(dates_images):
         if i == num_days:
             break
         resized_date_image = date_image.resize((cell_width * 2, cell_height))  # Resize to span two columns
         final_image.paste(resized_date_image, (i * cell_width * 2 + cell_width, 0))  # Position date images
+
+    random.shuffle(days_images)
 
 
     # Step 1: Place the weekday images in the first row
@@ -169,7 +173,7 @@ def create_final_rota_image(name_images, start_time_images, end_time_images, loc
         if row >= len(name_images):
             break  # Stop if we run out of images
 
-        images_in_row = [name_images[row]]
+        images_in_row = [name_images[random.randint(0,len(name_images) - 1)]]
 
         # Add start and end times for each day
         for i in range(num_days):
@@ -177,7 +181,7 @@ def create_final_rota_image(name_images, start_time_images, end_time_images, loc
             images_in_row.append(start_time_images[index])  # Start time for day i
             images_in_row.append(end_time_images[index])  # End time for day i
 
-        images_in_row.append(location_images[row])  # Location column
+        images_in_row.append(location_images[random.randint(0,len(location_images) - 1)])  # Location column
 
         for col in range(cols):
             img = images_in_row[col]
