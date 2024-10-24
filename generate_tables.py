@@ -208,7 +208,8 @@ location_images = print_progress(locationGenerator, "Location")
 days_images = print_progress(daysGenerator, "Day")
 dates_images = print_progress(datesGenerator, "Date")
 
-final_rota_image = create_final_rota_image(
+for i in range(15):
+    final_rota_image  = create_final_rota_image(
     name_images,
     start_time_images,
     end_time_images,
@@ -218,10 +219,10 @@ final_rota_image = create_final_rota_image(
     cell_width=300,
     cell_height=150,
     rows=20  # Adjust rows based on the data size
-)
-
-final_rota_image.save('output/rota_image.png')
-
+    )
+    current_index += 1
+    final_rota_image.save(f'output/rotapicture_{current_index}.png')
+    f.write(f'{current_index}.png {i}\n')
 
 
 #f.write(f'imagefinal.png {lbl}\n')
