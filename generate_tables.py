@@ -12,8 +12,8 @@ from PIL import Image, ImageDraw
 from datetime import datetime, timedelta
 import json
 
-
-NUM_IMAGES_TO_SAVE = 100
+NUMBER_OF_ROTAS = 10
+NUM_IMAGES_TO_SAVE = 1000
 
 data = []
 
@@ -148,6 +148,7 @@ labels = {}
 def create_final_rota_image(name_images_with_labels, start_time_images_with_labels, end_time_images_with_labels, location_images_with_labels, days_images_with_labels, dates_images_with_labels, cell_width,
                             cell_height, rows):
     # Set up table size
+    collected_labels = {}
     num_days = randint(5,10)  # Number of days to display
     cols = 1 + (num_days * 2) + 1  # 1 Name column, 2 columns per day (Start & End), 1 Location column
     table_width = cell_width * cols
@@ -164,12 +165,17 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
     for col in range(cols):
         draw.line([(col * cell_width, 0), (col * cell_width, table_height)], fill="black", width=20)  # Vertical lines
 
+
+    date_labels = []
+    day_labels = []
+
     # Place the date images in the first row
     for i,  (date_image, date_label) in enumerate(dates_images_with_labels):
         if i == num_days:
             break
         resized_date_image = date_image.resize((cell_width * 2 - 10, cell_height - 10))  # Resize to fit with padding
         final_image.paste(resized_date_image, (i * cell_width * 2 + cell_width, 0))  # Position date images
+        date_labels.append(date_label)
 
     random.shuffle(days_images_with_labels)
 
@@ -177,20 +183,25 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
     for i, (day_image, day_label) in enumerate(days_images_with_labels):
         if i == num_days:
             break
-        print(f"Day Image Label for index {i}: {day_label}")  # Example of using the label
 
         resized_day_image = day_image.resize((cell_width * 2 - 10, cell_height - 10))  # Resize to fit with padding
         final_image.paste(resized_day_image, (i * cell_width * 2 + cell_width, cell_height))  # Position weekday images
+        day_labels.append(day_label)
 
     # Step 2: Place each word image into its corresponding cell in the grid
     for row in range(rows):
         name_image, name_label = name_images_with_labels[random.randint(0, len(name_images_with_labels) - 1)]
+
+        if name_label not in collected_labels:
+            collected_labels[name_label] = []
         # Get images for the current row
         if row >= len(name_images_with_labels):
             break  # Stop if we run out of images
 
         images_in_row = [name_image]
 
+        location_image, location_label = location_images_with_labels[random.randint(0, len(location_images_with_labels) - 1)]
+        images_in_row.append(location_image)  # Location column
 
         # Add start and end times for each day
         for i in range(num_days):
@@ -201,8 +212,16 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
             images_in_row.append(start_time_image)  # Start time for day i
             images_in_row.append(end_time_image)  # End time for day i
 
-        location_image, location_label = location_images_with_labels[random.randint(0, len(location_images_with_labels) - 1)]
-        images_in_row.append(location_image)  # Location column
+            collected_labels[name_label].append({
+                "start_time": start_time_label,
+                "end_time": end_time_label,
+                "location": location_label,
+                "day": day_labels[i],  # This should correspond to the day in this row
+                "date": date_labels[i]
+            })
+
+
+
 
         for col in range(cols):
             img = images_in_row[col]
@@ -211,7 +230,8 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
             y = (row + 2) * cell_height  # Offset by one row to accommodate the weekday images
             final_image.paste(img_resized, (x, y))
 
-    return final_image
+
+    return final_image,collected_labels
 
 def print_progress(generator, label):
     images_with_labels = []
@@ -228,9 +248,11 @@ end_time_images_with_labels = print_progress(endTimeGenerator, "End Time")
 location_images_with_labels = print_progress(locationGenerator, "Location")
 days_images_with_labels = print_progress(daysGenerator, "Day")
 dates_images_with_labels = print_progress(datesGenerator, "Date")
+all_rota_data = []
 
-for i in range(3):
-    final_rota_image  = create_final_rota_image(
+
+for i in range(NUMBER_OF_ROTAS):
+    final_rota_image, current_labels  = create_final_rota_image(
     name_images_with_labels,
     start_time_images_with_labels,
     end_time_images_with_labels,
@@ -246,28 +268,20 @@ for i in range(3):
 
     filename = f'rotapicture_{current_index}.png'
     final_rota_image.save(f'output/{filename}')
+
+    rota_entry = f'Filename: {filename}\n'
+    for name, shifts in current_labels.items():
+        rota_entry += f'{name}:\n'
+        for shift in shifts:
+            rota_entry += f'    {shift["start_time"]}, {shift["end_time"]}, {shift["location"]}, {shift["day"]}, {shift["date"]}\n'
+
+    all_rota_data.append(rota_entry)
     # Gather details for the current shift
-    name = str(name_images_with_labels[i % len(name_images_with_labels)])
-    shift_entry = {
-        "filename": filename,
-        "start_time": str(start_time_images_with_labels[i % len(start_time_images_with_labels)]),
-        "end_time": str(end_time_images_with_labels[i % len(end_time_images_with_labels)]),
-        "location": str(location_images_with_labels[i % len(location_images_with_labels)]),
-        "day": str(days_images_with_labels[i % len(days_images_with_labels)]),
-        "date": str(dates_images_with_labels[i % len(dates_images_with_labels)])
-    }
-
-    # Add the shift entry to the correct name in the labels dictionary
-    if name not in labels:
-        labels[name] = []
-    labels[name].append(shift_entry)
-
-# Save all labels to a JSON file
-with open('output/labels.json', 'w') as json_file:
-    json.dump(labels, json_file, indent=4)
 
 
-#f.write(f'imagefinal.png {lbl}\n')
+with open('output/labels.txt', 'w') as text_file:
+    for entry in all_rota_data:
+        text_file.write(entry + '\n')
 
 f.close()
 
