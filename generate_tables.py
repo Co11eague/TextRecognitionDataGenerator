@@ -1,27 +1,21 @@
-from datetime import timedelta
-from tkinter.font import names
+from random import randint
 
 from trdg.generators import (
     GeneratorFromStrings,
 )
 from tqdm.auto import tqdm
 import os
-import numpy as np
 import random
 import pandas as pd
 from faker import Faker
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 from datetime import datetime, timedelta
-
-
-
+import json
 
 
 NUM_IMAGES_TO_SAVE = 100
-NUM_PRICES_TO_GENERATE = 1000
 
 data = []
-
 
 for i in range(1000):
     fake_person = Faker()
@@ -30,7 +24,7 @@ for i in range(1000):
     fake_date = fake_person.date()
 
     # Add a random duration (between 3 to 10 hours)
-    duration = timedelta(hours=random.randint(3, 10))
+    duration = timedelta(hours=random.randint(2, 12), minutes=random.randint(0, 59))
 
     # Calculate the end time by adding the duration
     fake_end = fake_start + duration
@@ -94,10 +88,11 @@ fake_dates_combinations = combinations(fake_dates)
 nameGenerator = GeneratorFromStrings(
     random.sample(name_combinations, min(len(name_combinations), 10000)),
 
+
     # uncomment the lines below for some image augmentation options
     # blur=6,
-    # random_blur=True,
-    # random_skew=True,
+    random_blur=True,
+    random_skew=True,
     # skewing_angle=20,
     # background_type=1,
     # text_color="red",
@@ -105,22 +100,32 @@ nameGenerator = GeneratorFromStrings(
 
 startTimeGenerator = GeneratorFromStrings(
     random.sample(start_time_combinations, min(len(start_time_combinations), 10000)),
+    random_blur=True,
+    random_skew=True,
 )
 
 endTimeGenerator = GeneratorFromStrings(
     random.sample(end_time_combinations, min(len(end_time_combinations), 10000)),
+    random_blur=True,
+    random_skew=True,
 )
 
 locationGenerator = GeneratorFromStrings(
     random.sample(location_combinations, min(len(location_combinations), 10000)),
+    random_blur=True,
+    random_skew=True,
 )
 
 daysGenerator = GeneratorFromStrings(
     random.sample(fake_day_combinations, min(len(fake_day_combinations), 10000)),
+    random_blur=True,
+    random_skew=True,
 )
 
 datesGenerator = GeneratorFromStrings(
     random.sample(fake_dates_combinations, min(len(fake_dates_combinations), 10000)),
+    random_blur=True,
+    random_skew=True,
 )
 
 # save images from generator
@@ -137,92 +142,129 @@ current_index = len(os.listdir('output')) - 1 #all images minus the labels file
 f = open("output/labels.txt", "a")
 
 images = []
+labels = {}
 
 
-def create_final_rota_image(name_images, start_time_images, end_time_images, location_images, days_images, dates_images, cell_width,
+def create_final_rota_image(name_images_with_labels, start_time_images_with_labels, end_time_images_with_labels, location_images_with_labels, days_images_with_labels, dates_images_with_labels, cell_width,
                             cell_height, rows):
     # Set up table size
-    num_days = 10  # Number of days to display
+    num_days = randint(5,10)  # Number of days to display
     cols = 1 + (num_days * 2) + 1  # 1 Name column, 2 columns per day (Start & End), 1 Location column
     table_width = cell_width * cols
     table_height = cell_height * (rows + 1)  # Adjust height for the weekday row
-    final_image = Image.new("RGB", (table_width, table_height), color="white")
+    background_colors = ["#f5f5f5", "#e0e0e0", "#ffffff", "#f0f8ff"]
+    final_image = Image.new("RGB", (table_width, table_height), color=random.choice(background_colors))
+    draw = ImageDraw.Draw(final_image)
 
-    random.shuffle(dates_images)
+    random.shuffle(dates_images_with_labels)
 
-    for i, date_image in enumerate(dates_images):
+    # Draw the outline for the table
+    for row in range(rows + 2):  # +2 for the date and weekday rows
+        draw.line([(0, row * cell_height), (table_width, row * cell_height)], fill="black", width=20)  # Horizontal lines
+    for col in range(cols):
+        draw.line([(col * cell_width, 0), (col * cell_width, table_height)], fill="black", width=20)  # Vertical lines
+
+    # Place the date images in the first row
+    for i,  (date_image, date_label) in enumerate(dates_images_with_labels):
         if i == num_days:
             break
-        resized_date_image = date_image.resize((cell_width * 2, cell_height))  # Resize to span two columns
+        resized_date_image = date_image.resize((cell_width * 2 - 10, cell_height - 10))  # Resize to fit with padding
         final_image.paste(resized_date_image, (i * cell_width * 2 + cell_width, 0))  # Position date images
 
-    random.shuffle(days_images)
+    random.shuffle(days_images_with_labels)
 
-
-    # Step 1: Place the weekday images in the first row
-    for i, day_image in enumerate(days_images):
+    # Step 1: Place the weekday images in the second row
+    for i, (day_image, day_label) in enumerate(days_images_with_labels):
         if i == num_days:
             break
-        resized_day_image = day_image.resize((cell_width * 2, cell_height))  # Resize to span two columns
-        final_image.paste(resized_day_image, (i * cell_width * 2 + cell_width, cell_height))  # Position weekday images below date images
+        print(f"Day Image Label for index {i}: {day_label}")  # Example of using the label
 
+        resized_day_image = day_image.resize((cell_width * 2 - 10, cell_height - 10))  # Resize to fit with padding
+        final_image.paste(resized_day_image, (i * cell_width * 2 + cell_width, cell_height))  # Position weekday images
 
     # Step 2: Place each word image into its corresponding cell in the grid
     for row in range(rows):
+        name_image, name_label = name_images_with_labels[random.randint(0, len(name_images_with_labels) - 1)]
         # Get images for the current row
-        if row >= len(name_images):
+        if row >= len(name_images_with_labels):
             break  # Stop if we run out of images
 
-        images_in_row = [name_images[random.randint(0,len(name_images) - 1)]]
+        images_in_row = [name_image]
+
 
         # Add start and end times for each day
         for i in range(num_days):
-            index = random.randint(0, len(start_time_images) - 1)
-            images_in_row.append(start_time_images[index])  # Start time for day i
-            images_in_row.append(end_time_images[index])  # End time for day i
+            index = random.randint(0, len(start_time_images_with_labels) - 1)
+            start_time_image, start_time_label = start_time_images_with_labels[index]
+            end_time_image, end_time_label = end_time_images_with_labels[index]
 
-        images_in_row.append(location_images[random.randint(0,len(location_images) - 1)])  # Location column
+            images_in_row.append(start_time_image)  # Start time for day i
+            images_in_row.append(end_time_image)  # End time for day i
+
+        location_image, location_label = location_images_with_labels[random.randint(0, len(location_images_with_labels) - 1)]
+        images_in_row.append(location_image)  # Location column
 
         for col in range(cols):
             img = images_in_row[col]
-            img_resized = img.resize((cell_width, cell_height))
+            img_resized = img.resize((cell_width - 10, cell_height - 10))  # Resize to fit in the cell
             x = col * cell_width
-            y = (row + 1) * cell_height  # Offset by one row to accommodate the weekday images
+            y = (row + 2) * cell_height  # Offset by one row to accommodate the weekday images
             final_image.paste(img_resized, (x, y))
 
     return final_image
 
 def print_progress(generator, label):
-    images = []
+    images_with_labels = []
     for img, lbl in generator:
-        images.append(img)
-        print(f"{label}: {len(images)} images processed")
-        if len(images) >= NUM_IMAGES_TO_SAVE:
+        images_with_labels.append((img, lbl))  # Store as a tuple (image, label)
+        print(f"{label}: {len(images_with_labels)} images processed")
+        if len(images_with_labels) >= NUM_IMAGES_TO_SAVE:
             break
-    return images
+    return images_with_labels  # Return the list of tuples
 
-name_images = print_progress(nameGenerator, "Name")
-start_time_images = print_progress(startTimeGenerator, "Start Time")
-end_time_images = print_progress(endTimeGenerator, "End Time")
-location_images = print_progress(locationGenerator, "Location")
-days_images = print_progress(daysGenerator, "Day")
-dates_images = print_progress(datesGenerator, "Date")
+name_images_with_labels = print_progress(nameGenerator, "Name")
+start_time_images_with_labels = print_progress(startTimeGenerator, "Start Time")
+end_time_images_with_labels = print_progress(endTimeGenerator, "End Time")
+location_images_with_labels = print_progress(locationGenerator, "Location")
+days_images_with_labels = print_progress(daysGenerator, "Day")
+dates_images_with_labels = print_progress(datesGenerator, "Date")
 
-for i in range(15):
+for i in range(3):
     final_rota_image  = create_final_rota_image(
-    name_images,
-    start_time_images,
-    end_time_images,
-    location_images,
-    days_images,
-    dates_images,
-    cell_width=300,
-    cell_height=150,
-    rows=20  # Adjust rows based on the data size
+    name_images_with_labels,
+    start_time_images_with_labels,
+    end_time_images_with_labels,
+    location_images_with_labels,
+    days_images_with_labels,
+    dates_images_with_labels,
+    cell_width=randint(280, 320),
+    cell_height=randint(140, 160),
+    rows=randint(5,25)  # Adjust rows based on the data size
     )
     current_index += 1
     final_rota_image.save(f'output/rotapicture_{current_index}.png')
-    f.write(f'{current_index}.png {i}\n')
+
+    filename = f'rotapicture_{current_index}.png'
+    final_rota_image.save(f'output/{filename}')
+    # Gather details for the current shift
+    name = str(name_images_with_labels[i % len(name_images_with_labels)])
+    shift_entry = {
+        "filename": filename,
+        "start_time": str(start_time_images_with_labels[i % len(start_time_images_with_labels)]),
+        "end_time": str(end_time_images_with_labels[i % len(end_time_images_with_labels)]),
+        "location": str(location_images_with_labels[i % len(location_images_with_labels)]),
+        "day": str(days_images_with_labels[i % len(days_images_with_labels)]),
+        "date": str(dates_images_with_labels[i % len(dates_images_with_labels)])
+    }
+
+    # Add the shift entry to the correct name in the labels dictionary
+    if name not in labels:
+        labels[name] = []
+    labels[name].append(shift_entry)
+
+# Save all labels to a JSON file
+with open('output/labels.json', 'w') as json_file:
+    json.dump(labels, json_file, indent=4)
 
 
 #f.write(f'imagefinal.png {lbl}\n')
