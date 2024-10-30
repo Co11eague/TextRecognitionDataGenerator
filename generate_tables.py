@@ -10,123 +10,79 @@ import pandas as pd
 from faker import Faker
 from PIL import Image, ImageDraw
 from datetime import datetime, timedelta
-import json
 
-NUMBER_OF_ROTAS = 10
+#Settings
+NUMBER_OF_ROTAS = 3
 NUM_IMAGES_TO_SAVE = 1000
+CELL_WIDTH_RANGE = (280, 320)
+CELL_HEIGHT_RANGE = (140, 160)
+ROWS_RANGE = (5, 25)
 
 data = []
+fake = Faker()
 
-for i in range(1000):
-    fake_person = Faker()
-    fake_start_str = fake_person.time(pattern="%H:%M")
-    fake_start = datetime.strptime(fake_start_str, "%H:%M")
-    fake_date = fake_person.date()
+for _ in range(NUM_IMAGES_TO_SAVE):
+    start_time = datetime.strptime(fake.time(pattern="%H:%M"), "%H:%M")
+    end_time = start_time + timedelta(hours=randint(3, 10), minutes=randint(0, 59))
 
-    # Add a random duration (between 3 to 10 hours)
-    duration = timedelta(hours=random.randint(2, 12), minutes=random.randint(0, 59))
+    data.append([
+        fake.first_name(),
+        start_time.strftime("%H:%M"),
+        end_time.strftime("%H:%M"),
+        fake.city(),
+        fake.day_of_week(),
+        fake.date()
+    ])
 
-    # Calculate the end time by adding the duration
-    fake_end = fake_start + duration
-
-    # Convert end time back to a string if needed for display purposes
-    fake_end_str = fake_end.strftime("%H:%M")
-    fake_location = fake_person.city()
-    fake_day = fake_person.day_of_week()
-
-    # Append the data
-    data.append([fake_person.first_name(), fake_start_str, fake_end_str, fake_location, fake_day, fake_date])
-
-# Create DataFrame from the generated data (do this once after loop)
 df = pd.DataFrame(data, columns=["name", "start_time", "end_time", "location", "fake_day", "fake_date"])
 
-# Split into 4 separate arrays (done after the loop)
-names = df["name"].to_numpy()
-start_times = df["start_time"].to_numpy()
-end_times = df["end_time"].to_numpy()
-locations = df["location"].to_numpy()
-fake_days = df["fake_day"].to_numpy()
-fake_dates = df["fake_date"].to_numpy()
+# Cleanup and generate unique combinations
+def cleanup(values):
+    filtered = [x for x in values if pd.notna(x)]
+    unique_values = list(set(filtered))
+    print(f"Cleaned {len(values) - len(filtered)} NaN values and removed {len(filtered) - len(unique_values)} duplicates")
+    return unique_values
+
+
+names = cleanup(df["name"].tolist())
+start_times = cleanup(df["start_time"].tolist())
+end_times = cleanup(df["end_time"].tolist())
+locations = cleanup(df["location"].tolist())
+fake_days = cleanup(df["fake_day"].tolist())
+fake_dates = cleanup(df["fake_date"].tolist())
+
+
+# Set up generators for images
+def create_generator(data, label):
+    print(f"{label}: {len(data)} images to process")
+    return GeneratorFromStrings(random.sample(data, min(len(data), 10000)), random_blur=True, random_skew=True)
 
 
 
-def cleanup(data):
-    num_before = len(data)
-    data = [x for x in data if str(x) != 'nan']
-    after_nan_filter = len(data)
-    print("removed: ", num_before - after_nan_filter, "words because of nan values")
-    data = list(set(data))
-    print("Removed", len(data), "duplicates")
-    print("Current number of words: ", len(data))
-    return data
+name_gen = create_generator(names, "Names")
+start_time_gen = create_generator(start_times, "Start Times")
+end_time_gen = create_generator(end_times, "End Times")
+location_gen = create_generator(locations, "Locations")
+day_gen = create_generator(fake_days, "Days")
+date_gen = create_generator(fake_dates, "Dates")
 
-def combinations(data):
-    combinations = []
-    for word in tqdm(data):
-        combinations.append(word)
+# Save generated images and their labels
+def save_images(generator, label):
+    images = []
+    for img, lbl in generator:
+        images.append((img, lbl))
+        print(f"{label}: {len(images)} images processed")
+        if len(images) >= NUM_IMAGES_TO_SAVE:
+            break
+    return images
 
-    return combinations
-
-names = cleanup(names)
-start_times = cleanup(start_times)
-end_times = cleanup(end_times)
-locations = cleanup(locations)
-fake_days = cleanup(fake_days)
-fake_dates = cleanup(fake_dates)
-
-
-# now given word list and number list, get all combinations
-name_combinations = combinations(names)
-start_time_combinations = combinations(start_times)
-end_time_combinations = combinations(end_times)
-location_combinations = combinations(locations)
-fake_day_combinations = combinations(fake_days)
-fake_dates_combinations = combinations(fake_dates)
-
-
-#generate the images
-nameGenerator = GeneratorFromStrings(
-    random.sample(name_combinations, min(len(name_combinations), 10000)),
-
-
-    # uncomment the lines below for some image augmentation options
-    # blur=6,
-    random_blur=True,
-    random_skew=True,
-    # skewing_angle=20,
-    # background_type=1,
-    # text_color="red",
-)
-
-startTimeGenerator = GeneratorFromStrings(
-    random.sample(start_time_combinations, min(len(start_time_combinations), 10000)),
-    random_blur=True,
-    random_skew=True,
-)
-
-endTimeGenerator = GeneratorFromStrings(
-    random.sample(end_time_combinations, min(len(end_time_combinations), 10000)),
-    random_blur=True,
-    random_skew=True,
-)
-
-locationGenerator = GeneratorFromStrings(
-    random.sample(location_combinations, min(len(location_combinations), 10000)),
-    random_blur=True,
-    random_skew=True,
-)
-
-daysGenerator = GeneratorFromStrings(
-    random.sample(fake_day_combinations, min(len(fake_day_combinations), 10000)),
-    random_blur=True,
-    random_skew=True,
-)
-
-datesGenerator = GeneratorFromStrings(
-    random.sample(fake_dates_combinations, min(len(fake_dates_combinations), 10000)),
-    random_blur=True,
-    random_skew=True,
-)
+# Load images and labels
+name_images = save_images(name_gen, "Names")
+start_images = save_images(start_time_gen, "Start Times")
+end_images = save_images(end_time_gen, "End Times")
+location_images = save_images(location_gen, "Locations")
+day_images = save_images(day_gen, "Days")
+date_images = save_images(date_gen, "Dates")
 
 # save images from generator
 # if output folder doesnt exist, create it
@@ -233,55 +189,26 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 
     return final_image,collected_labels
 
-def print_progress(generator, label):
-    images_with_labels = []
-    for img, lbl in generator:
-        images_with_labels.append((img, lbl))  # Store as a tuple (image, label)
-        print(f"{label}: {len(images_with_labels)} images processed")
-        if len(images_with_labels) >= NUM_IMAGES_TO_SAVE:
-            break
-    return images_with_labels  # Return the list of tuples
-
-name_images_with_labels = print_progress(nameGenerator, "Name")
-start_time_images_with_labels = print_progress(startTimeGenerator, "Start Time")
-end_time_images_with_labels = print_progress(endTimeGenerator, "End Time")
-location_images_with_labels = print_progress(locationGenerator, "Location")
-days_images_with_labels = print_progress(daysGenerator, "Day")
-dates_images_with_labels = print_progress(datesGenerator, "Date")
 all_rota_data = []
 
+with open('output/labels.txt', 'w') as label_file:
+    current_index = len(os.listdir('output')) - 1
+    for _ in range(NUMBER_OF_ROTAS):
+        rota_img, labels = create_final_rota_image(
+            name_images, start_images, end_images, location_images, day_images, date_images,
+            cell_width=randint(*CELL_WIDTH_RANGE), cell_height=randint(*CELL_HEIGHT_RANGE), rows=randint(*ROWS_RANGE)
+        )
+        filename = f'output/rotapicture_{current_index}.png'
+        rota_img.save(filename)
 
-for i in range(NUMBER_OF_ROTAS):
-    final_rota_image, current_labels  = create_final_rota_image(
-    name_images_with_labels,
-    start_time_images_with_labels,
-    end_time_images_with_labels,
-    location_images_with_labels,
-    days_images_with_labels,
-    dates_images_with_labels,
-    cell_width=randint(280, 320),
-    cell_height=randint(140, 160),
-    rows=randint(5,25)  # Adjust rows based on the data size
-    )
-    current_index += 1
-    final_rota_image.save(f'output/rotapicture_{current_index}.png')
+        entry = f'Filename: rotapicture_{current_index}.png\n'
+        for name, shifts in labels.items():
+            entry += f"{name}:\n"
+            for shift in shifts:
+                entry += f"    {shift['start_time']}, {shift['end_time']}, {shift['location']}, {shift['day']}, {shift['date']}\n"
 
-    filename = f'rotapicture_{current_index}.png'
-    final_rota_image.save(f'output/{filename}')
-
-    rota_entry = f'Filename: {filename}\n'
-    for name, shifts in current_labels.items():
-        rota_entry += f'{name}:\n'
-        for shift in shifts:
-            rota_entry += f'    {shift["start_time"]}, {shift["end_time"]}, {shift["location"]}, {shift["day"]}, {shift["date"]}\n'
-
-    all_rota_data.append(rota_entry)
-    # Gather details for the current shift
-
-
-with open('output/labels.txt', 'w') as text_file:
-    for entry in all_rota_data:
-        text_file.write(entry + '\n')
+        label_file.write(entry)
+        current_index += 1
 
 f.close()
 
