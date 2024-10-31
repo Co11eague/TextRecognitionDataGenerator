@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 from datetime import datetime, timedelta
 
 
-TABLE_TYPE = 5
+TABLE_TYPE = 6
 
 #Settings
 NUMBER_OF_ROTAS = 2
@@ -35,6 +35,7 @@ for _ in range(NUM_IMAGES_TO_SAVE):
 
     # Create the concise time range format
     concise_time_range = f"{name} ({start_hour}-{end_hour})"
+    no_name_concise_time_range = f"({start_hour}-{end_hour})"
 
     date_str = fake.date()
 
@@ -57,9 +58,10 @@ for _ in range(NUM_IMAGES_TO_SAVE):
         date_and_day,
         time_range,
         concise_time_range,
+        no_name_concise_time_range
     ])
 
-df = pd.DataFrame(data, columns=["name", "start_time", "end_time", "location", "fake_day", "fake_date", "date_and_day", "time_range", "concise_time_range"])
+df = pd.DataFrame(data, columns=["name", "start_time", "end_time", "location", "fake_day", "fake_date", "date_and_day", "time_range", "concise_time_range", "no_name_concise_time_range"])
 
 # Cleanup and generate unique combinations
 def cleanup(values):
@@ -78,6 +80,7 @@ fake_dates = cleanup(df["fake_date"].tolist())
 date_and_day = cleanup(df["date_and_day"].tolist())
 time_range = cleanup(df["time_range"].tolist())
 concise_time_range = cleanup(df["concise_time_range"].tolist())
+no_name_concise_time_range = cleanup(df["no_name_concise_time_range"].tolist())
 
 # Set up generators for images
 def create_generator(data, label):
@@ -95,6 +98,7 @@ date_gen = create_generator(fake_dates, "Dates")
 date_and_day_gen = create_generator(date_and_day, "Date and Day")
 time_range_gen = create_generator(time_range, "Time Ranges")
 concise_time_range_gen = create_generator(concise_time_range, "Concise Time Ranges")
+no_name_concise_time_range_gen = create_generator(no_name_concise_time_range, "No Name Concise Time Ranges")
 
 # Save generated images and their labels
 def save_images(generator, label):
@@ -116,6 +120,7 @@ date_images = save_images(date_gen, "Dates")
 date_and_day_images = save_images(date_and_day_gen, "Date and Day")
 time_range_images = save_images(time_range_gen, "Time Ranges")
 concise_time_range_images = save_images(concise_time_range_gen, "Concise Time Ranges")
+no_name_concise_time_range_images = save_images(no_name_concise_time_range_gen, "No Name Concise Time Ranges")
 
 # save images from generator
 # if output folder doesnt exist, create it
@@ -134,7 +139,7 @@ images = []
 labels = {}
 
 
-def create_final_rota_image(name_images_with_labels, start_time_images_with_labels, end_time_images_with_labels, location_images_with_labels, days_images_with_labels, dates_images_with_labels, date_and_day_images_with_labels, time_range_images_with_labels, concise_time_range_images_with_labels, cell_width,
+def create_final_rota_image(name_images_with_labels, start_time_images_with_labels, end_time_images_with_labels, location_images_with_labels, days_images_with_labels, dates_images_with_labels, date_and_day_images_with_labels, time_range_images_with_labels, concise_time_range_images_with_labels, no_name_concise_time_range_images_with_labels, cell_width,
                             cell_height, rows, table_type):
     # Set up table size
     collected_labels = {}
@@ -393,8 +398,6 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 
             day_image, day_label = days_images_with_labels[random.randint(0, len(days_images_with_labels) - 1)]
             date_image, date_label = dates_images_with_labels[random.randint(0, len(dates_images_with_labels) - 1)]
-            location_image, location_label = location_images_with_labels[random.randint(0, len(location_images_with_labels) - 1)]
-            time_range_image, time_range_label = time_range_images_with_labels[random.randint(0, len(time_range_images_with_labels) - 1)]
 
             for i in range(cols):
                 if i == 0:
@@ -436,6 +439,59 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
                 x = col * cell_width
                 y = (row) * cell_height  # Offset by one row to accommodate the weekday images
                 final_image.paste(img_resized, (x, y))
+    elif table_type == 6:
+        for row in range(rows):
+            draw.line([(0, row * cell_height), (table_width, row * cell_height)], fill="black", width=20)  # Horizontal lines
+        for col in range(cols):
+            draw.line([(col * cell_width, 0), (col * cell_width, table_height)], fill="black", width=20)  # Vertical lines
+
+
+        date_and_day_labels = []
+
+        # Place the date images in the first row
+        for i,  (date_and_day_image, date_and_day_label) in enumerate(date_and_day_images_with_labels):
+            if i == cols:
+                break
+            resized_date_image = date_and_day_image.resize((cell_width - 10, cell_height - 10))  # Resize to fit with padding
+            final_image.paste(resized_date_image, ((i + 1) * cell_width, 0))  # Position date images
+            date_and_day_labels.append(date_and_day_label)
+
+        for row in range(1, rows):
+            images_in_row = []
+
+            name_image, name_label = name_images_with_labels[random.randint(0, len(name_images_with_labels) - 1)]
+
+            for i in range(cols):
+                if i == 0:
+                    images_in_row.append(name_image)
+
+                    if name_label not in collected_labels:
+                        collected_labels[name_label] = []
+                else:
+                    no_name_concise_time_range_image, no_name_concise_time_range_label = no_name_concise_time_range_images_with_labels[random.randint(0, len(concise_time_range_images_with_labels) - 1)]
+                    images_in_row.append(no_name_concise_time_range_image)
+
+                    # Split the time range to get start and end times
+                    start_time, end_time = no_name_concise_time_range_label.strip("()").split("-")
+
+                    date_part = date_and_day_labels[i - 1].split(' ')[0]  # Get the date part
+                    day_part = date_and_day_labels[i - 1].split('(')[-1].strip(') ')  # Get the day part
+
+
+            # Get images for the current row
+                    collected_labels[name_label].append({
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "day": day_part,  # This should correspond to the day in this row
+                        "date": date_part
+                    })
+
+            for col in range(cols):
+                img = images_in_row[col]
+                img_resized = img.resize((cell_width - 10, cell_height - 10))  # Resize to fit in the cell
+                x = col * cell_width
+                y = (row) * cell_height  # Offset by one row to accommodate the weekday images
+                final_image.paste(img_resized, (x, y))
 
 
     return final_image,collected_labels
@@ -446,7 +502,7 @@ with open('output/labels.txt', 'w') as label_file:
     current_index = len(os.listdir('output')) - 1
     for _ in range(NUMBER_OF_ROTAS):
         rota_img, labels = create_final_rota_image(
-            name_images, start_images, end_images, location_images, day_images, date_images, date_and_day_images, time_range_images, concise_time_range_images,
+            name_images, start_images, end_images, location_images, day_images, date_images, date_and_day_images, time_range_images, concise_time_range_images, no_name_concise_time_range_images,
             cell_width=randint(*CELL_WIDTH_RANGE), cell_height=randint(*CELL_HEIGHT_RANGE), rows=randint(*ROWS_RANGE), table_type=TABLE_TYPE
         )
         filename = f'output/rotapicture_{current_index}.png'
@@ -467,4 +523,5 @@ f.close()
 
 
 
-### 9 5 3 4
+### Refactoring, fixing random proper, and checking if labels are right Wed
+### Fine tuning Thurs
