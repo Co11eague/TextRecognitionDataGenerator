@@ -245,6 +245,11 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 
     elif table_type == 3:
         names = []
+        location = []
+        start_time = []
+        end_time = []
+        days = []
+        dates = []
         for row in range(rows):  # +2 for the date and weekday rows
             draw.line([(0, row * cell_height), (table_width, row * cell_height)], fill="black", width=20)  # Horizontal lines
         for col in range(cols):
@@ -269,10 +274,10 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 
             date_part = date_and_day_labels[i].split(' ')[0]  # Get the date part
             day_part = date_and_day_labels[i].split('(')[-1].strip(') ')  # Get the day part
-            collected_labels[name_label].append({
-                "date": date_part,
-                "day": day_part
-            })
+            days.append(day_part)
+            dates.append(date_part)
+
+
             resized_name_image = name_image.resize(
                 (cell_width - 10, cell_height - 10))  # Resize to fit with padding
             final_image.paste(resized_name_image, (i * cell_width, cell_height))  # Position date images
@@ -293,18 +298,12 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 
                 images_in_row.append(image)
 
-                if (i==0):
-                    collected_labels[names[j]].append({
-                        "location": label
-                    })
-                elif (i==1):
-                    collected_labels[names[j]].append({
-                        "start_time": label,
-                    })
-                elif (i==2):
-                    collected_labels[names[j]].append({
-                        "end_time": label,
-                    })
+                if (i == 0):
+                    location.append(label)
+                elif (i == 1):
+                    start_time.append(label)
+                elif (i == 2):
+                    end_time.append(label)
 
             for row in range(rows - 2):
                 for col in range(cols):
@@ -316,6 +315,14 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
                         x = col * cell_width
                         y = (row + 2) * cell_height  # Offset by one row to accommodate the weekday images
                         final_image.paste(img_resized, (x, y))
+        for col in range(cols):
+            collected_labels[names[col]].append({
+                "start_time": start_time[col],
+                "end_time": end_time[col],
+                "location": location[col],
+                "day": days[col],  # This should correspond to the day in this row
+                "date": dates[col]
+            })
 
     return final_image,collected_labels
 
