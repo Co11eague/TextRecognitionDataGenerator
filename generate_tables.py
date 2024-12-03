@@ -1,3 +1,4 @@
+import json
 from random import randint
 
 from trdg.background_generator import image
@@ -11,24 +12,29 @@ import pandas as pd
 from faker import Faker
 from PIL import Image, ImageDraw
 from datetime import datetime, timedelta
+from io import BytesIO
+
 
 TABLE_TYPE = 6
 
 # Settings
-NUMBER_OF_ROTAS = 6
+NUMBER_OF_ROTAS = 10
 NUM_IMAGES_TO_SAVE = 100
-CELL_WIDTH_RANGE = (400, 500)
-CELL_HEIGHT_RANGE = (200, 300)
-ROWS_RANGE = (5, 20)
-COLUMNS_RANGE = (5, 20)
+CELL_WIDTH_RANGE = (150, 500)
+CELL_HEIGHT_RANGE = (100, 300)
+ROWS_RANGE = (5, 15)
+COLUMNS_RANGE = (5, 15)
+TABLE_TYPE_RANGE = (3, 3)
 
 data = []
 fake = Faker()
 
+
+
 for _ in range(NUM_IMAGES_TO_SAVE):
 	start_time = datetime.strptime(fake.time(pattern="%H:%M"), "%H:%M")
 	end_time = start_time + timedelta(hours=randint(3, 10), minutes=randint(0, 59))
-	name = fake.name()
+	name = fake.first_name()
 
 	start_hour = str(start_time.strftime("%I")).lstrip('0')  # Get hour in 12-hour format without leading zeros
 	end_hour = str(end_time.strftime("%I")).lstrip('0')  # Get hour in 12-hour format without leading zeros
@@ -88,7 +94,7 @@ no_name_concise_time_range = cleanup(df["no_name_concise_time_range"].tolist())
 # Set up generators for images
 def create_generator(data, label):
 	print(f"{label}: {len(data)} images to process")
-	return GeneratorFromStrings(random.sample(data, min(len(data), 10000)), random_blur=True, random_skew=True)
+	return GeneratorFromStrings(random.sample(data, len(data)), random_blur=True, random_skew=True)
 
 
 name_gen = create_generator(names, "Names")
@@ -103,14 +109,21 @@ concise_time_range_gen = create_generator(concise_time_range, "Concise Time Rang
 no_name_concise_time_range_gen = create_generator(no_name_concise_time_range, "No Name Concise Time Ranges")
 
 
-# Save generated images and their labels
 def save_images(generator, label):
 	saved_images = []
 	for img, lbl in generator:
-		saved_images.append((img, lbl))
+		# Compress the image by converting it to JPEG format with quality setting
+		buffer = BytesIO()
+		img.save(buffer, format="JPEG")  # Adjust quality to balance compression
+		compressed_img = Image.open(buffer)
+
+		# Append the compressed image and its label to the list
+		saved_images.append((compressed_img, lbl))
+
 		print(f"{label}: {len(saved_images)} images processed")
 		if len(saved_images) >= NUM_IMAGES_TO_SAVE:
 			break
+
 	return saved_images
 
 
@@ -144,7 +157,8 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 		6: {"cols": 1 + columns, "rows": rows + 1},
 		"default": {"cols": 1 + (columns * 2) + 1, "rows": rows + 2}
 	}
-	collected_labels = {}
+	collected_labels = []
+	final_collected_labels = {}
 
 	dims = table_dimensions.get(table_type, table_dimensions["default"])
 	cols, rows = dims["cols"], dims["rows"]
@@ -171,10 +185,10 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 		final_image.paste(img_resized, (x, y))
 
 	def add_labels(label_name, label_day, label_date, label_location, label_start_time, label_end_time):
-		if label_name not in collected_labels:
-			collected_labels[label_name] = []
+		if label_name not in final_collected_labels:
+			final_collected_labels[label_name] = []
 		if label_location is not None:
-			collected_labels[label_name].append({
+			final_collected_labels[label_name].append({
 				"start_time": label_start_time,
 				"end_time": label_end_time,
 				"location": label_location,
@@ -182,7 +196,7 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 				"date": label_date
 			})
 		else:
-			collected_labels[label_name].append({
+			final_collected_labels[label_name].append({
 				"start_time": label_start_time,
 				"end_time": label_end_time,
 				"day": label_day,
@@ -195,6 +209,8 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 	if table_type == 1:
 		date_labels = []
 		day_labels = []
+		random.shuffle(dates_images_with_labels)
+		random.shuffle(days_images_with_labels)
 
 		# Draw the outline for the table
 		draw_table_outline(draw, rows, cols, cell_width, cell_height, table_width, table_height)
@@ -205,13 +221,17 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 				(cell_width * 2 - 10, cell_height - 10))  # Resize to fit with padding
 			final_image.paste(resized_date_image, (index * cell_width * 2 + cell_width, 0))  # Position date images
 			date_labels.append(date_label)
+			collected_labels.append(date_label)
+		collected_labels.append("---")
 
 		# Step 1: Place the weekday images in the second row
 		for index, (day_image, day_label) in enumerate(days_images_with_labels[:columns]):
 			resized_day_image = day_image.resize((cell_width * 2 - 10, cell_height - 10))  # Resize to fit with padding
 			final_image.paste(resized_day_image,
 			                  (index * cell_width * 2 + cell_width, cell_height))  # Position weekday images
+			collected_labels.append(day_label)
 			day_labels.append(day_label)
+		collected_labels.append("---")
 
 		# Step 2: Place each word image into its corresponding cell in the grid
 		for row in range(rows - 2):
@@ -220,6 +240,7 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 			images_in_row = [name_image]
 
 			location_image, location_label = get_random_image_label(location_images_with_labels)
+			collected_labels.append(name_label)
 
 			# Add start and end times for each day
 			for index in range(columns):
@@ -230,10 +251,14 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 				images_in_row.append(start_time_image)  # Start time for day i
 				images_in_row.append(end_time_image)  # End time for day i
 
+				collected_labels.append(start_time_label)
+				collected_labels.append(end_time_label)
 				add_labels(name_label, day_labels[index], date_labels[index], location_label, start_time_label,
 				           end_time_label)
 
 			images_in_row.append(location_image)  # Location column
+			collected_labels.append(location_label)
+			collected_labels.append("---")
 
 			for col in range(cols):
 				img = images_in_row[col]
@@ -253,6 +278,13 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 			start_time_image, start_time_label = start_time_images_with_labels[index]
 			end_time_image, end_time_label = end_time_images_with_labels[index]
 			images_in_row = [date_image, day_image, name_image, location_image, start_time_image, end_time_image]
+			collected_labels.append(date_label)
+			collected_labels.append(day_label)
+			collected_labels.append(name_label)
+			collected_labels.append(location_label)
+			collected_labels.append(start_time_label)
+			collected_labels.append(end_time_label)
+			collected_labels.append("---")
 
 			add_labels(name_label, day_label, date_label, location_label, start_time_label, end_time_label)
 
@@ -261,6 +293,7 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 				resize_and_paste(img, col * cell_width, row * cell_height)
 
 	elif table_type == 3:
+		random.shuffle(date_and_day_images_with_labels)
 		names_labels = []
 		location_labels = []
 		start_time_labels = []
@@ -278,6 +311,11 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 
 			resize_and_paste(date_and_day_image, index * cell_width, 0)
 			date_and_day_labels.append(date_and_day_label)
+			collected_labels.append(date_and_day_label)
+
+		collected_labels.append("---")
+
+		random.shuffle(name_images_with_labels)
 
 		for index, (name_image, name_label) in enumerate(name_images_with_labels[:cols]):
 
@@ -290,7 +328,8 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 			resize_and_paste(name_image, index * cell_width, cell_height)
 
 			names_labels.append(name_label)
-
+			collected_labels.append(name_label)
+		collected_labels.append("---")
 		# Step 2: Place each word image into its corresponding cell in the grid
 		for index in range(rows - 2):
 
@@ -299,6 +338,11 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 				list_image, label = get_random_image_label(variables[index])
 
 				images_in_row.append(list_image)
+				collected_labels.append(label)
+
+
+				if j == cols-1:
+					collected_labels.append("---")
 
 				if index == 0:
 					location_labels.append(label)
@@ -329,6 +373,12 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 			images_in_row = [date_image, day_image, name_image, location_image, time_range_image]
 
 			start_time_str, end_time_str = time_range_label.split(" - ")
+			collected_labels.append(date_label)
+			collected_labels.append(day_label)
+			collected_labels.append(name_label)
+			collected_labels.append(location_label)
+			collected_labels.append(time_range_label)
+			collected_labels.append("---")
 			add_labels(name_label, day_label, date_label, location_label, start_time_str, end_time_str)
 
 			for col in range(cols):
@@ -349,14 +399,17 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 			for index in range(cols):
 				if index == 0:
 					images_in_row.append(date_image)
+					collected_labels.append(date_label)
 					date_labels.append(date_label)
 				elif index == 1:
 					images_in_row.append(day_image)
+					collected_labels.append(day_label)
 					day_labels.append(day_label)
 				else:
 					concise_time_range_image, concise_time_range_label = get_random_image_label(
 						concise_time_range_images_with_labels)
 					images_in_row.append(concise_time_range_image)
+					collected_labels.append(concise_time_range_label)
 
 					name_part, time_range_part = concise_time_range_label.split(" (")
 					time_range_part = time_range_part.strip(")")  # Remove the closing parenthesis
@@ -378,12 +431,16 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 		date_and_day_labels = []
 
 		draw_table_outline(draw, rows, cols, cell_width, cell_height, table_width, table_height)
+		random.shuffle(date_and_day_images_with_labels)
+
 
 		# Place the date images in the first row
-		for index, (date_and_day_image, date_and_day_label) in enumerate(date_and_day_images_with_labels[:cols]):
+		for index, (date_and_day_image, date_and_day_label) in enumerate(date_and_day_images_with_labels[:cols - 1]):
 
 			resize_and_paste(date_and_day_image, (index + 1) * cell_width, 0)
+			collected_labels.append(date_and_day_label)
 			date_and_day_labels.append(date_and_day_label)
+
 
 		for row in range(1, rows):
 			images_in_row = []
@@ -393,11 +450,13 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 			for index in range(cols):
 				if index == 0:
 					images_in_row.append(name_image)
+					collected_labels.append(name_label)
 
 				else:
 					no_name_concise_time_range_image, no_name_concise_time_range_label = get_random_image_label(
 						no_name_concise_time_range_images_with_labels)
 					images_in_row.append(no_name_concise_time_range_image)
+					collected_labels.append(no_name_concise_time_range_label)
 
 					# Split the time range to get start and end times
 					start_time_labels, end_time_labels = no_name_concise_time_range_label.strip("()").split("-")
@@ -407,35 +466,68 @@ def create_final_rota_image(name_images_with_labels, start_time_images_with_labe
 
 					add_labels(name_label, day_part, date_part, None, start_time_labels, end_time_labels)
 
+			collected_labels.append("---")
 			for col in range(cols):
 				img = images_in_row[col]
 				resize_and_paste(img, col * cell_width, row * cell_height)
 
-	return final_image, collected_labels
+	return final_image, collected_labels, final_collected_labels
 
 
 all_rota_data = []
 
-with open('output/labels.txt', 'w') as label_file:
-	current_index = len(os.listdir('output')) - 1
+
+def format_shifts(json_data):
+    formatted_lines = []
+
+    for name, shifts in json_data.items():
+        # Construct the formatted line for each person
+        shift_strings = [
+            f"{shift['start_time']},{shift['end_time']},{shift['location']},{shift['day']},{shift['date']}"
+            if 'location' in shift else f"{shift['start_time']},{shift['end_time']},{shift['day']},{shift['date']}"
+            for shift in shifts
+        ]
+        formatted_line = f"{name}: " + ", ".join(shift_strings)
+        formatted_lines.append(formatted_line)
+    formatted_lines.append("\n")
+
+    # Join all formatted lines into one long line
+    return " ".join(formatted_lines)
+
+
+with open('./output/labels.txt', "a") as label_file:
+	current_index = len(os.listdir('./output')) - 1
 	for i in range(1, NUMBER_OF_ROTAS + 1):
-		rota_img, labels = create_final_rota_image(
+		print("Image saved: ", current_index)
+		print("Loop: ", i)
+		rota_img, labels, final_labels = create_final_rota_image(
 			name_images, start_images, end_images, location_images, day_images, date_images, date_and_day_images,
 			time_range_images, concise_time_range_images, no_name_concise_time_range_images,
-			cell_width=randint(*CELL_WIDTH_RANGE), cell_height=randint(*CELL_HEIGHT_RANGE), rows=3,
-			columns=3, table_type=i
+			cell_width=randint(*CELL_WIDTH_RANGE), cell_height=randint(*CELL_HEIGHT_RANGE), rows=randint(*ROWS_RANGE),
+			columns=randint(*COLUMNS_RANGE), table_type=randint(*TABLE_TYPE_RANGE)
 		)
-		filename = f'output/rotapicture_{current_index}.png'
-		rota_img.save(filename)
+		filename = f'./output/rotapicture_{current_index}.png'
+		rota_img.save(filename, format="JPEG")
 
-		entry = f'Filename: rotapicture_{current_index}.png\n'
-		for name, shifts in labels.items():
-			entry += f"{name}:\n"
-			for shift in shifts:
-				# Write each shift's available fields
-				entry += "    " + ",".join(f"{v}" for k, v in shift.items()) + "\n"
+		formatted_labels = []
 
-		label_file.write(entry)
+		entry = f'Filename: rotapicture_{current_index}.png\n'  # Filename on a new line
+
+		# Format each label by splitting and joining with "|"
+		for label in labels:
+			if label == "---":
+				# If the label is a row separator, just append it as is
+				formatted_labels.append(label)
+			else:
+				formatted_labels.append(label)
+
+		# Join all formatted labels into one string, separated by space and rows by "---"
+		entry += "|".join(formatted_labels)  # Separate labels by space
+
+		# Write to the label file
+		label_file.write(entry.strip() + "\n")  # Ensure no trailing space or newline at the end
+
 		current_index += 1
 
-### Fine tuning Thurs
+		with open('output/final_labels.txt', "a") as final_label_file:
+			final_label_file.write(format_shifts(final_labels))
