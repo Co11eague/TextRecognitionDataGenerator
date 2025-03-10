@@ -1,9 +1,12 @@
 import os
+from random import randint
 from typing import List, Tuple
+
+from django.utils.termcolors import background
 
 from trdg.data_generator import FakeTextDataGenerator
 from trdg.utils import load_dict, load_fonts
-
+import random
 # support RTL
 from arabic_reshaper import ArabicReshaper
 from bidi.algorithm import get_display
@@ -64,14 +67,15 @@ class GeneratorFromStrings:
             # reshape the strings
             self.strings = self.reshape_rtl(self.strings, self.rtl_shaper)
         self.language = language
-        self.size = size
+        self.size = randint(20, 80)
         self.skewing_angle = skewing_angle
         self.random_skew = random_skew
         self.blur = blur
         self.random_blur = random_blur
-        self.background_type = background_type
+        self.background_type = randint(0, 1)
         self.distorsion_type = distorsion_type
         self.distorsion_orientation = distorsion_orientation
+
         self.is_handwritten = is_handwritten
         self.width = width
         self.alignment = alignment
@@ -88,7 +92,7 @@ class GeneratorFromStrings:
         self.generated_count = 0
         self.stroke_width = stroke_width
         self.stroke_fill = stroke_fill
-        self.image_mode = image_mode
+        self.image_mode = "L"
 
     def __iter__(self):
         return self
@@ -100,19 +104,26 @@ class GeneratorFromStrings:
         if self.generated_count == self.count:
             raise StopIteration
         self.generated_count += 1
+        size = randint(20, 80)
+        background_type = randint(0, 1)
+        allignment = randint(0, 2)
+
+        #print("Size: "+str(size)+" Background Type: "+str(background_type)+" Distorsion Type: "+str(distorsion_type)+" Distorsion Orientation: "+str(distorsion_orientation)+" Allignment: "+str(allignment) + "Space Width: "+str(space_width)+" Character_Spacing: "+str(character_spacing))
+
+
         return (
             FakeTextDataGenerator.generate(
                 self.generated_count,
                 self.strings[(self.generated_count - 1) % len(self.strings)],
                 self.fonts[(self.generated_count - 1) % len(self.fonts)],
                 None,
-                self.size,
+                size,
                 None,
                 self.skewing_angle,
                 self.random_skew,
                 self.blur,
                 self.random_blur,
-                self.background_type,
+                background_type,
                 self.distorsion_type,
                 self.distorsion_orientation,
                 self.is_handwritten,
@@ -130,7 +141,7 @@ class GeneratorFromStrings:
                 self.image_dir,
                 self.stroke_width,
                 self.stroke_fill,
-                self.image_mode,
+                "L" ,
                 self.output_bboxes,
             ),
             self.orig_strings[(self.generated_count - 1) % len(self.orig_strings)]
