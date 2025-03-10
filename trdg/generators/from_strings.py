@@ -2,7 +2,6 @@ import os
 from random import randint
 from typing import List, Tuple
 
-from django.utils.termcolors import background
 
 from trdg.data_generator import FakeTextDataGenerator
 from trdg.utils import load_dict, load_fonts

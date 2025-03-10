@@ -1,11 +1,8 @@
-import json
 from random import randint
 
-from trdg.background_generator import image
 from trdg.generators import (
 	GeneratorFromStrings,
 )
-from tqdm.auto import tqdm
 import os
 import random
 import pandas as pd
@@ -17,8 +14,8 @@ from io import BytesIO
 TABLE_TYPE = 6
 
 # Settings
-NUMBER_OF_ROTAS = 1000
-NUM_IMAGES_TO_SAVE = 2000
+NUMBER_OF_ROTAS = 10
+NUM_IMAGES_TO_SAVE = 100
 CELL_WIDTH_RANGE = (150, 500)
 CELL_HEIGHT_RANGE = (100, 300)
 ROWS_RANGE = (5, 15)
@@ -496,63 +493,66 @@ def format_shifts(json_data):
 	# Join all formatted lines into one long line
 	return " ".join(formatted_lines)
 
+def main():
+	with open('../TextRecognitionDataGenerator/valid_output/labels.txt', "a") as label_file:
+		current_index = len(os.listdir('../TextRecognitionDataGenerator/valid_output')) - 1
+		for i in range(1, NUMBER_OF_ROTAS + 1):
+			print("Image saved: ", current_index)
+			print("Loop: ", i)
+			if not SEPARATE:
 
-with open('../deep-text-recognition-benchmark/valid_output/labels.txt', "a") as label_file:
-	current_index = len(os.listdir('../deep-text-recognition-benchmark/valid_output')) - 1
-	for i in range(1, NUMBER_OF_ROTAS + 1):
-		print("Image saved: ", current_index)
-		print("Loop: ", i)
-		if not SEPARATE:
+				rota_img, labels, final_labels = create_final_rota_image(
+					name_images, start_images, end_images, location_images, day_images, date_images, date_and_day_images,
+					time_range_images, concise_time_range_images, no_name_concise_time_range_images,
+					cell_width=randint(*CELL_WIDTH_RANGE), cell_height=randint(*CELL_HEIGHT_RANGE),
+					rows=randint(*ROWS_RANGE),
+					columns=randint(*COLUMNS_RANGE), table_type=randint(*TABLE_TYPE_RANGE)
+				)
+				filename = f'../TextRecognitionDataGenerator/valid_output/rotapicture_{current_index}.png'
+				rota_img.save(filename, format="JPEG")
 
-			rota_img, labels, final_labels = create_final_rota_image(
-				name_images, start_images, end_images, location_images, day_images, date_images, date_and_day_images,
-				time_range_images, concise_time_range_images, no_name_concise_time_range_images,
-				cell_width=randint(*CELL_WIDTH_RANGE), cell_height=randint(*CELL_HEIGHT_RANGE),
-				rows=randint(*ROWS_RANGE),
-				columns=randint(*COLUMNS_RANGE), table_type=randint(*TABLE_TYPE_RANGE)
-			)
-			filename = f'../deep-text-recognition-benchmark/valid_output/rotapicture_{current_index}.png'
-			rota_img.save(filename, format="JPEG")
+				formatted_labels = []
 
-			formatted_labels = []
+				entry = f'Filename: rotapicture_{current_index}.png\n'  # Filename on a new line
 
-			entry = f'Filename: rotapicture_{current_index}.png\n'  # Filename on a new line
+				# Format each label by splitting and joining with "|"
+				for label in labels:
+					if label == "---":
+						# If the label is a row separator, just append it as is
+						formatted_labels.append(label)
+					else:
+						formatted_labels.append(label)
 
-			# Format each label by splitting and joining with "|"
-			for label in labels:
-				if label == "---":
-					# If the label is a row separator, just append it as is
-					formatted_labels.append(label)
-				else:
-					formatted_labels.append(label)
+				# Join all formatted labels into one string, separated by space and rows by "---"
+				entry += "|".join(formatted_labels)  # Separate labels by space
 
-			# Join all formatted labels into one string, separated by space and rows by "---"
-			entry += "|".join(formatted_labels)  # Separate labels by space
+				# Write to the label file
+				label_file.write(entry.strip() + "\n")  # Ensure no trailing space or newline at the end
 
-			# Write to the label file
-			label_file.write(entry.strip() + "\n")  # Ensure no trailing space or newline at the end
+				current_index += 1
 
-			current_index += 1
+				with open('./out/final_labels.txt', "a") as final_label_file:
+					final_label_file.write(format_shifts(final_labels))
+			else:
+				IMAGES = [name_images, start_images, end_images, location_images, day_images, date_images,
+						  date_and_day_images,
+						  time_range_images, concise_time_range_images, no_name_concise_time_range_images]
 
-			with open('./out/final_labels.txt', "a") as final_label_file:
-				final_label_file.write(format_shifts(final_labels))
-		else:
-			IMAGES = [name_images, start_images, end_images, location_images, day_images, date_images,
-			          date_and_day_images,
-			          time_range_images, concise_time_range_images, no_name_concise_time_range_images]
+				filename = f'../TextRecognitionDataGenerator/valid_output/rotapicture_{current_index}.png'
+				image, label = IMAGES[(i - 1) % 10][randint(0, (NUM_IMAGES_TO_SAVE - 1))]
+				image.save(filename, format="JPEG")
 
-			filename = f'../deep-text-recognition-benchmark/valid_output/rotapicture_{current_index}.png'
-			image, label = IMAGES[(i - 1) % 10][randint(0, (NUM_IMAGES_TO_SAVE - 1))]
-			image.save(filename, format="JPEG")
+				formatted_labels = []
 
-			formatted_labels = []
+				entry = f'Filename: rotapicture_{current_index}.png\n'  # Filename on a new line
 
-			entry = f'Filename: rotapicture_{current_index}.png\n'  # Filename on a new line
+				# Join all formatted labels into one string, separated by space and rows by "---"
+				entry += label  # Separate labels by space
 
-			# Join all formatted labels into one string, separated by space and rows by "---"
-			entry += label  # Separate labels by space
+				# Write to the label file
+				label_file.write(entry.strip() + "\n")  # Ensure no trailing space or newline at the end
 
-			# Write to the label file
-			label_file.write(entry.strip() + "\n")  # Ensure no trailing space or newline at the end
+				current_index += 1
 
-			current_index += 1
+if __name__ == "__main__":
+	main()
